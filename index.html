@@ -64,6 +64,7 @@ input,textarea,select{font-family:inherit}
 .field textarea{resize:vertical;min-height:88px;line-height:1.55}
 .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--cyan);box-shadow:var(--ring)}
 .field .hint{font-size:.72rem;color:var(--muted2);margin-top:6px}
+.hint svg{width:14px;height:14px;flex:none;vertical-align:-2px;display:inline-block}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:var(--radius-sm);
   padding:12px 20px;font-weight:600;font-size:.92rem;transition:transform .12s,filter .15s,background .15s;
@@ -1618,7 +1619,7 @@ async function modalEditarArea(a){
     ${podeTrocarResp?`<div class="field"><label>Responsável pela área</label>
       ${pickOne('eaResp', candidatos, a.responsavelId)}
       <div class="hint">Ao trocar, a pessoa escolhida passa a liderar esta área e a responder ao responsável da área acima.</div></div>`
-    :`<div class="hint">${ICON.info} Para trocar o responsável desta área, é preciso ser o administrador ou um responsável acima dela.</div>`}
+    :`<div class="inline-note">${ICON.info}<span>Para trocar o responsável desta área, é preciso ser o administrador ou um responsável acima dela.</span></div>`}
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEA">Salvar</button>`});
   el('bEA').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fEA'))); const b=el('bEA');b.disabled=true;b.textContent='Salvando…';
     try{
