@@ -874,8 +874,11 @@ VIEWS.usuarios = async function(){
     <div id="buscaUsuarios_vazio" class="empty" style="display:none">${ICON.users}<p>Nenhum usuário encontrado com esse termo.</p></div>
   </div>`;
 };
-function modalEditarUsuario(u){
-  const cargos=S.cache.cargos||[];
+async function modalEditarUsuario(u, opts){
+  opts = opts || {};
+  const souAdmin = S.user.perfil==='admin';
+  let cargos = S.cache.cargos||[];
+  if(!cargos.length){ try{ cargos = (await api('listarCargos')).cargos; S.cache.cargos=cargos; }catch(e){ cargos=[]; } }
   const ehAdm = u.perfil==='admin';
   modal({wide:true, title:`Editar · ${u.nome}`, body:`<form id="fEU">
     <div class="field"><label>Nome completo</label><input name="nome" required value="${esc(u.nome)}"/></div>
@@ -887,14 +890,14 @@ function modalEditarUsuario(u){
       <div class="field"><label>Login</label><input name="login" required value="${esc(u.login)}"/></div>
       <div class="field"><label>Status</label><select name="ativo"><option value="true" ${String(u.ativo)!=='false'?'selected':''}>Ativo</option><option value="false" ${String(u.ativo)==='false'?'selected':''}>Inativo</option></select></div>
     </div>
-    <div class="field"><label>Nível de acesso</label>
+    ${souAdmin?`<div class="field"><label>Nível de acesso</label>
       <select name="perfil">
         <option value="colaborador" ${(u.nivel||u.perfil)==='colaborador'?'selected':''}>Colaborador — acesso básico</option>
         <option value="gerente" ${(u.nivel||u.perfil)==='gerente'?'selected':''}>Gerente — vê cargos e usuários, cria comunicados</option>
         <option value="admin" ${(u.nivel||u.perfil)==='admin'?'selected':''}>Administrador — acesso total</option>
       </select>
       <div class="hint">Gerente e líderes de área também têm poderes de gestão (as regras somam).</div>
-    </div>
+    </div>`:''}
     ${ehAdm?'<div class="hint">Este usuário é administrador. Ele pode ser atribuído a áreas como responsável pelo Organograma.</div>':`<div class="form-row">
       <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}" ${c.id===u.cargoId?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0" value="${u.salario||''}"/></div>
@@ -910,10 +913,12 @@ function modalEditarUsuario(u){
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEU">Salvar</button>`});
   el('bEU').onclick=async()=>{ const f=el('fEU'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bEU');b.disabled=true;b.textContent='Salvando…';
     try{
-      await api('atualizarUsuario',{id:u.id,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,ativo:d.ativo,perfil:d.perfil,
-        dataNascimento:d.dataNascimento,dataAdmissao:d.dataAdmissao,dataDemissao:d.dataDemissao});
-      if(!ehAdm) await api('atribuirCargo',{colaboradorId:u.id,cargoId:d.cargoId,salario:d.salario});
-      toast('Usuário atualizado.','ok'); closeModal(); go('usuarios');
+      const payload={id:u.id,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,ativo:d.ativo,
+        dataNascimento:d.dataNascimento,dataAdmissao:d.dataAdmissao,dataDemissao:d.dataDemissao};
+      if(souAdmin) payload.perfil=d.perfil;
+      if(!ehAdm){ payload.cargoId=d.cargoId||''; if(d.salario!=='') payload.salario=d.salario; }
+      await api('atualizarUsuario',payload);
+      toast('Cadastro atualizado.','ok'); closeModal(); go(opts.voltar||'usuarios');
     }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Salvar'; }
   };
 }
@@ -1129,7 +1134,7 @@ VIEWS.colaboradores = async function(){
       <td>${c.areaNome?`<span class="pill cyan">${esc(c.areaNome)}</span>`:'<span class="pill gray">sem área</span>'}</td>
       <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
       <td class="row-actions">
-        ${c.avalioDiretamente?`<button class="btn btn-ghost btn-sm" onclick='modalAtribuir(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Atribuir</button>
+        ${c.avalioDiretamente?`<button class="btn btn-ghost btn-sm" title="Editar cadastro, cargo e salário" onclick='modalEditarUsuario(${JSON.stringify(c).replace(/'/g,"&#39;")},{voltar:"colaboradores"})'>${ICON.edit}<span>Editar</span></button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Feedbacks" onclick="abrirFeedbacks('${c.id}','${esc(c.nome)}')">${ICON.message}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Nova avaliação" onclick="iniciarAvaliacao('${c.id}','${esc(c.nome)}')">${ICON.chart}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Senha" onclick="modalResetSenha('${c.id}','${esc(c.nome)}')">${ICON.key}</button>
