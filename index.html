@@ -1055,11 +1055,12 @@ async function excluirArea(id,nome){ confirmar(`Remover a área "${nome}"?`, asy
 /* ---------------- GERENTE · CARGOS ---------------- */
 VIEWS.cargos = async function(){
   const ehAdm = S.user.perfil==='admin';
-  setHead('Cargos', ehAdm?'Você cria os cargos e define quais gerentes podem editar cada um.':'Cargos da empresa. Você edita apenas os que foram liberados para você.',
-    ehAdm?`<button class="btn btn-primary" onclick="modalCargo()">${ICON.plus}<span>Novo cargo</span></button>`:'');
+  const podeCriar = ehAdm || (S.user.capacidades&&S.user.capacidades.comunicar) || S.user.nivel==='gerente';
+  setHead('Cargos', ehAdm?'Você cria os cargos e define quais gerentes podem editar cada um.':'Cargos da empresa. Você edita os que criar e os que forem liberados para você.',
+    podeCriar?`<button class="btn btn-primary" onclick="modalCargo()">${ICON.plus}<span>Novo cargo</span></button>`:'');
   const {cargos} = await api('listarCargos');
   S.cache.cargos = cargos;
-  if(!cargos.length) return el('content').innerHTML = ehAdm
+  if(!cargos.length) return el('content').innerHTML = podeCriar
     ? emptyState('Nenhum cargo cadastrado','Cadastre os cargos com objetivo, competências e % de avanço de função.','Novo cargo','modalCargo()')
     : `<div class="empty">${ICON.badge}<p>Nenhum cargo cadastrado ainda.</p></div>`;
   el('content').innerHTML = `<div class="grid cols-2">${cargos.map(c=>{
@@ -1707,11 +1708,32 @@ VIEWS['minhas-avaliacoes'] = async function(){
       <button class="btn ${a.status==='aguardando_autoavaliacao'?'btn-primary':'btn-ghost'} btn-block" style="margin-top:16px" onclick="abrirAvaliacao('${a.id}')">${a.status==='aguardando_autoavaliacao'?'Fazer autoavaliação':'Ver detalhes'}</button>
     </div>`).join('')}</div>`;
 };
+async function editarMeuCargo(){
+  const me = S.user;
+  let cargos = S.cache.cargos||[];
+  if(!cargos.length){ try{ cargos=(await api('listarCargos')).cargos; S.cache.cargos=cargos; }catch(e){ cargos=[]; } }
+  modal({title:'Meu cargo', body:`<form id="fMC">
+    <div class="field"><label>Cargo</label>
+      <select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}" ${c.id===me.cargoId?'selected':''}>${esc(c.nome)}</option>`).join('')}</select>
+      <div class="hint">Escolha entre os cargos cadastrados. Para criar um novo, use a aba <b>Cargos</b>.</div>
+    </div>
+    <div class="field"><label>Meu salário (R$)</label><input name="salario" type="number" step="0.01" min="0" value="${me.salario||''}"/></div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bMC">Salvar</button>`});
+  el('bMC').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fMC'))); const b=el('bMC');b.disabled=true;b.textContent='Salvando…';
+    try{ const payload={id:me.id,cargoId:d.cargoId}; if(d.salario!=='') payload.salario=d.salario;
+      await api('atualizarUsuario',payload);
+      const r=await api('me'); if(r&&r.usuario) S.user=r.usuario;
+      toast('Cargo atualizado.','ok'); closeModal(); go('meu-cargo');
+    }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Salvar'; } };
+}
 VIEWS['meu-cargo'] = async function(){
-  setHead('Meu cargo','Descrição da sua função (sem informações salariais)');
+  const gestor = !!(S.user.capacidades && S.user.capacidades.gestao) || S.user.perfil==='admin';
+  setHead('Meu cargo','Descrição da sua função', gestor?`<button class="btn btn-ghost" onclick="editarMeuCargo()">${ICON.edit}<span>Editar meu cargo</span></button>`:'');
   const {cargo}=await api('meuCargo');
   const c = cargo;
-  if(!c) return el('content').innerHTML = emptyState('Cargo não definido','Seu gestor ainda não atribuiu um cargo ao seu perfil.','','');
+  if(!c) return el('content').innerHTML = gestor
+    ? emptyState('Cargo não definido','Você pode definir o seu próprio cargo aqui.','Definir meu cargo','editarMeuCargo()')
+    : emptyState('Cargo não definido','Seu gestor ainda não atribuiu um cargo ao seu perfil.','','');
   const comps=String(c.competencias||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
   el('content').innerHTML = `<div class="card" style="max-width:720px">
     <div class="card-h"><h3>${esc(c.nome)}</h3><span class="pill gold">Meu cargo</span></div>
@@ -1721,7 +1743,8 @@ VIEWS['meu-cargo'] = async function(){
       ${c.criteriosPromocao?`<div><div class="k">Critérios para promoção</div><div class="v">${esc(c.criteriosPromocao)}</div></div>`:''}
       ${comps.length?`<div><div class="k">Competências</div><div class="chip-tags">${comps.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div></div>`:''}
     </div>
-    <div class="inline-note" style="margin-top:20px">${ICON.info}<span>As informações de remuneração ficam disponíveis apenas para a gestão.</span></div>
+    ${gestor && (S.user.salario||S.user.salario===0)?`<div style="margin-top:18px;border-top:1px solid var(--border-soft);padding-top:16px"><div class="k">Meu salário</div><div style="margin-top:5px"><span class="pill gold">${money(S.user.salario||0)}</span></div></div>`
+      :'<div class="inline-note" style="margin-top:20px">'+ICON.info+'<span>As informações de remuneração ficam disponíveis apenas para a gestão.</span></div>'}
   </div>`;
 };
 VIEWS['meus-feedbacks'] = async function(){
